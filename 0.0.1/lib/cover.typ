@@ -1,4 +1,3 @@
-
 #let cover(
     body,
     title: str,

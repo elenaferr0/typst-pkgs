@@ -1,2 +1,3 @@
-#import "lib/setup.typ": *
-#import "lib/cover.typ": *
+#import "lib/setup.typ": setup
+#import "lib/cover.typ": cover
+#import "lib/widgets/callout/callout.typ": callout

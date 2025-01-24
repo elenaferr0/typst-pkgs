@@ -3,7 +3,7 @@
 #let types = (
   info: (
     file: "info.svg",
-    color: light-blue,
+    color: lighter-blue,
   ),
   warning: (
     file: "warning.svg",
@@ -32,6 +32,7 @@
   let type-name = upper(type.at(0)) + type.slice(1)
   let (file, color) = types.at(type)
 
+  v(5pt)
   block(
     clip: true,
     breakable: true,
@@ -48,9 +49,9 @@
         columns: 2,
         gutter: 6pt,
         align: start + horizon,
-        image("icons/" + file, width: 1.5em),
-        text(if title != none { title } else { type-name }, weight: "bold")
-      )
+        image("icons/" + file, width: 1.25em),
+        text(if title != none { title } else { type-name }, weight: "bold"),
+      ),
     )
     #block(
       width: 100%,

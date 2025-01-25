@@ -3,7 +3,7 @@
 #let setup(body, header-l: none, header-r: none) = {
   let font-size = 11pt
   set text(font: "Radio Canada Big", size: font-size)
-  // show heading.where(level: 2): set text(blue)
+  set heading(numbering: "1.")
 
   set page(
     header: context {

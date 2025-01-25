@@ -34,10 +34,10 @@
   v(35%)
 
   set text(30pt)
-  heading(outlined: false, text(title))
+  heading(outlined: false, text(title), numbering: none)
   set text(16pt)
   if subtitle != none {
-    heading(outlined: false, text(subtitle))
+    heading(outlined: false, text(subtitle), numbering: none)
     v(5%)
   }
 

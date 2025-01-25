@@ -2,8 +2,12 @@
 
 #let setup(body, header-l: none, header-r: none) = {
   let font-size = 11pt
+  // set rules
   set text(font: "Radio Canada Big", size: font-size)
+
   set heading(numbering: "1.")
+
+  set outline(depth: 3, indent: 10pt)
 
   set page(
     header: context {
@@ -40,6 +44,12 @@
      )
     }
   )
+
+  // show rules
+  show outline: o => {
+    o
+    pagebreak()
+  }
 
   body
 }

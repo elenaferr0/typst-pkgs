@@ -3,7 +3,7 @@
 #let types = (
   info: (
     file: "info.svg",
-    color: lighter-blue,
+    color: light-grey,
   ),
   warning: (
     file: "warning.svg",
@@ -25,9 +25,13 @@
     file: "experiment.svg",
     color: purple,
   ),
+  theorem: (
+    file: "theorem.svg",
+    color: lighter-blue,
+  ),
 )
 
-#let callout(body, title: none, type: "info") = {
+#let callout(body, title: none, type: "theorem") = {
   assert(type in types)
   let type-name = upper(type.at(0)) + type.slice(1)
   let (file, color) = types.at(type)

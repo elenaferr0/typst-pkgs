@@ -4,8 +4,8 @@
   body,
   title: str,
   subtitle: none,
-  name: "Elena Ferro",
-  uni: "Università degli Studi di Padova",
+  name: str,
+  uni: str,
   primary-color: blue,
   secondary-color: light-blue,
 ) = {

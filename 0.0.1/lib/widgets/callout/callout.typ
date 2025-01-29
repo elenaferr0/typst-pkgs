@@ -31,7 +31,7 @@
   ),
 )
 
-#let callout(body, title: none, type: "theorem") = {
+#let callout(body, title: none, type: "theorem", breakable: false) = {
   assert(type in types)
   let type-name = upper(type.at(0)) + type.slice(1)
   let (file, color) = types.at(type)
@@ -39,13 +39,13 @@
   v(5pt)
   block(
     clip: true,
-    breakable: true,
+    breakable: breakable,
     radius: 5pt,
     stroke: 2pt + color,
   )[
     #block(
       fill: color,
-      breakable: false,
+      breakable: breakable,
       width: 100%,
       spacing: 0pt,
       inset: (x: 1em, y: 0.35em),

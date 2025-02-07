@@ -51,5 +51,7 @@
     pagebreak()
   }
 
+  show image: it => align(center, it)
+
   body
 }

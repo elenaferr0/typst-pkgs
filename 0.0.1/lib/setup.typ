@@ -1,6 +1,6 @@
 #import "colors.typ": *
 
-#let setup(body, header-l: none, header-r: none) = {
+#let setup(body, header-l: none, header-r: none, main-color: none) = {
   let font-size = 11pt
   // set rules
   set text(font: "Radio Canada Big", size: font-size)
@@ -19,7 +19,7 @@
           align(right, text(header-r, grey, style: "italic", size: font-size - 1pt)),
           grid.cell(
             colspan: 2,
-            line(length: 100%, stroke: blue)
+            line(length: 100%, stroke: grey)
           )
         )
       }

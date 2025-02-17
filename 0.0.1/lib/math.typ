@@ -6,4 +6,5 @@
 #let iff = $#arrow.l.r.double$
 #let E = $#sym.EE$
 #let R = $#sym.RR$
+#let Z = $#sym.ZZ$
 

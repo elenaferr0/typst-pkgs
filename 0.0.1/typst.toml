@@ -1,4 +1,4 @@
 [package]
-name = "ttk"
+name = "typst-template-kit"
 version = "0.0.1"
 entrypoint = "main.typ"

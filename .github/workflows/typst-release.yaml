@@ -1,5 +1,10 @@
 name: Typst Library Release
 
+# Define permissions at the workflow level
+permissions:
+  contents: write
+  packages: write
+
 on:
   push:
     branches: [ main, master ]
@@ -37,8 +42,7 @@ jobs:
             # List all directories to find the namespace and version
             echo "Searching for version directory..."
             
-            # This is the important change - use the current directory (repository root)
-            # rather than the absolute path with username
+            # Use the current directory (repository root) for path resolution
             NAMESPACE_PATHS=$(find . -type d -name "${MANUAL_VERSION}" | grep -v "node_modules" | grep -v ".git" || echo "")
             
             if [[ -n "$NAMESPACE_PATHS" ]]; then
@@ -50,10 +54,11 @@ jobs:
               echo "Namespace: ${NAMESPACE}"
               echo "Version: ${MANUAL_VERSION}"
               
-              echo "::set-output name=version::${MANUAL_VERSION}"
-              echo "::set-output name=namespace::${NAMESPACE}"
-              echo "::set-output name=version_path::${VERSION_PATH}"
-              echo "::set-output name=skip_validation::true"
+              # Use GITHUB_OUTPUT environment file instead of set-output command
+              echo "version=${MANUAL_VERSION}" >> $GITHUB_OUTPUT
+              echo "namespace=${NAMESPACE}" >> $GITHUB_OUTPUT
+              echo "version_path=${VERSION_PATH}" >> $GITHUB_OUTPUT
+              echo "skip_validation=true" >> $GITHUB_OUTPUT
               exit 0
             else
               echo "Error: Manually specified version ${MANUAL_VERSION} not found in repository structure"
@@ -107,7 +112,7 @@ jobs:
               NAMESPACE_PATH=$(dirname "$LATEST_VERSION_DIR" | sed 's|^./||' | xargs basename)
               VERSION_PATH="${NAMESPACE_PATH}/${NEW_VERSION}"
               echo "No changes detected, using latest version directory: ${NEW_VERSION}"
-              echo "::set-output name=skip_validation::true"
+              echo "skip_validation=true" >> $GITHUB_OUTPUT
             else
               echo "No version directories found"
               echo "Directory listing for debugging:"
@@ -125,14 +130,14 @@ jobs:
             for FILE in $CHANGED_FILES; do
               if [[ ! $FILE =~ ^${NAMESPACE_PATH}/${NEW_VERSION}/ ]]; then
                 echo "Warning: Changes include files outside the new version folder"
-                echo "::set-output name=validation_warning::true"
+                echo "validation_warning=true" >> $GITHUB_OUTPUT
               fi
             done
           fi
           
-          echo "::set-output name=version::${NEW_VERSION}"
-          echo "::set-output name=namespace::${NAMESPACE_PATH}"
-          echo "::set-output name=version_path::${VERSION_PATH}"
+          echo "version=${NEW_VERSION}" >> $GITHUB_OUTPUT
+          echo "namespace=${NAMESPACE_PATH}" >> $GITHUB_OUTPUT
+          echo "version_path=${VERSION_PATH}" >> $GITHUB_OUTPUT
           echo "Version detected: ${NEW_VERSION} in namespace ${NAMESPACE_PATH}"
 
       - name: Check if release exists
@@ -141,15 +146,15 @@ jobs:
         run: |
           # Check if the release already exists
           RELEASE_EXISTS=$(curl -s -o /dev/null -w "%{http_code}" \
-            -H "Authorization: token ${{ secrets.RELEASE_TOKEN }}" \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/releases/tags/v${{ steps.detect-version.outputs.version }}")
             
           if [[ "$RELEASE_EXISTS" == "200" ]]; then
             echo "Release already exists for version ${{ steps.detect-version.outputs.version }}"
-            echo "::set-output name=exists::true"
+            echo "exists=true" >> $GITHUB_OUTPUT
           else
             echo "No existing release found for version ${{ steps.detect-version.outputs.version }}"
-            echo "::set-output name=exists::false"
+            echo "exists=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Create release archives
@@ -182,42 +187,21 @@ jobs:
           # Create zip archive
           zip -r "./archives/${NAMESPACE}-${VERSION}.zip" "${VERSION_PATH}"
           
-          echo "::set-output name=targz::./archives/${NAMESPACE}-${VERSION}.tar.gz"
-          echo "::set-output name=zip::./archives/${NAMESPACE}-${VERSION}.zip"
+          echo "targz=./archives/${NAMESPACE}-${VERSION}.tar.gz" >> $GITHUB_OUTPUT
+          echo "zip=./archives/${NAMESPACE}-${VERSION}.zip" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         if: steps.detect-version.outputs.version != '' && steps.check-release.outputs.exists != 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         id: create-release
-        uses: actions/create-release@v1
-        env:
-          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ steps.detect-version.outputs.version }}
-          release_name: Version ${{ steps.detect-version.outputs.version }}
+          name: Version ${{ steps.detect-version.outputs.version }}
           draft: false
           prerelease: false
           body: |
             Release of version ${{ steps.detect-version.outputs.version }}
             ${{ steps.detect-version.outputs.validation_warning == 'true' && '⚠️ Warning: This release may include changes outside the version directory.' || '' }}
-
-      - name: Upload tar.gz Asset
-        if: steps.detect-version.outputs.version != '' && steps.check-release.outputs.exists != 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-        uses: actions/upload-release-asset@v1
-        env:
-          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-        with:
-          upload_url: ${{ steps.create-release.outputs.upload_url }}
-          asset_path: ${{ steps.create-archives.outputs.targz }}
-          asset_name: ${{ steps.detect-version.outputs.namespace }}-${{ steps.detect-version.outputs.version }}.tar.gz
-          asset_content_type: application/gzip
-
-      - name: Upload zip Asset
-        if: steps.detect-version.outputs.version != '' && steps.check-release.outputs.exists != 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-        uses: actions/upload-release-asset@v1
-        env:
-          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-        with:
-          upload_url: ${{ steps.create-release.outputs.upload_url }}
-          asset_path: ${{ steps.create-archives.outputs.zip }}
-          asset_name: ${{ steps.detect-version.outputs.namespace }}-${{ steps.detect-version.outputs.version }}.zip
-          asset_content_type: application/zip
+          files: |
+            ${{ steps.create-archives.outputs.targz }}
+            ${{ steps.create-archives.outputs.zip }}

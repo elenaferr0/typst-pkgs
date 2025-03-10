@@ -1,9 +1,9 @@
 #import "colors.typ": *
 
-#let setup(body, header-l: none, header-r: none, main-color: none) = {
+#let setup(body, header-l: none, header-r: none, main-color: none, font: none) = {
   let font-size = 11pt
   // set rules
-  set text(font: "Radio Canada Big", size: font-size)
+  set text(font: if font == none {"Radio Canada Big"} else {font}, size: font-size)
 
   set heading(numbering: "1.")
 

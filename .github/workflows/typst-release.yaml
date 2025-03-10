@@ -6,11 +6,11 @@ permissions:
   packages: write
 
 on:
-  push:
-    branches: [ main, master ]
+  # Only trigger on completed pull requests to master/main
   pull_request:
-    branches: [ main, master ]
-  # Add manual trigger for existing versions
+    types: [closed]
+    branches: [master, main]
+  # Keep manual trigger for testing and backdating
   workflow_dispatch:
     inputs:
       version:
@@ -20,6 +20,8 @@ on:
 
 jobs:
   detect-and-release:
+    # Only run if the PR was merged (not just closed without merging)
+    if: ${{ github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -54,7 +56,6 @@ jobs:
               echo "Namespace: ${NAMESPACE}"
               echo "Version: ${MANUAL_VERSION}"
               
-              # Use GITHUB_OUTPUT environment file instead of set-output command
               echo "version=${MANUAL_VERSION}" >> $GITHUB_OUTPUT
               echo "namespace=${NAMESPACE}" >> $GITHUB_OUTPUT
               echo "version_path=${VERSION_PATH}" >> $GITHUB_OUTPUT
@@ -68,16 +69,33 @@ jobs:
             fi
           fi
           
-          # Get the latest commit hash
-          LATEST_COMMIT=$(git rev-parse HEAD)
-          
-          # Get the list of changed files in the latest commit or PR
+          # For PR-based detection, use the PR base and head commits
           if [ "${{ github.event_name }}" == "pull_request" ]; then
-            # For PRs, compare with base branch
-            CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} $LATEST_COMMIT)
+            # For merged PRs, get changed files between base and merge commit
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.merge_commit_sha }}"
+            CHANGED_FILES=$(git diff --name-only $BASE_SHA $HEAD_SHA)
           else
-            # For direct pushes, use the parent commit
-            CHANGED_FILES=$(git diff --name-only $LATEST_COMMIT^1 $LATEST_COMMIT 2>/dev/null || echo "")
+            # Fallback for manual workflow runs without version
+            echo "For workflow_dispatch, please specify a version to release"
+            echo "Looking for the latest version folder instead..."
+            VERSION_DIRS=$(find . -mindepth 2 -maxdepth 2 -type d | grep -v "node_modules" | grep -v ".git" | sort -V)
+            if [[ -n "$VERSION_DIRS" ]]; then
+              # Get the latest version directory
+              LATEST_VERSION_DIR=$(echo "$VERSION_DIRS" | tail -n 1)
+              NEW_VERSION=$(basename "$LATEST_VERSION_DIR")
+              NAMESPACE_PATH=$(dirname "$LATEST_VERSION_DIR" | sed 's|^./||' | xargs basename)
+              VERSION_PATH="${NAMESPACE_PATH}/${NEW_VERSION}"
+              echo "No changes detected, using latest version directory: ${NEW_VERSION}"
+              echo "version=${NEW_VERSION}" >> $GITHUB_OUTPUT
+              echo "namespace=${NAMESPACE_PATH}" >> $GITHUB_OUTPUT
+              echo "version_path=${VERSION_PATH}" >> $GITHUB_OUTPUT
+              echo "skip_validation=true" >> $GITHUB_OUTPUT
+              exit 0
+            else
+              echo "No version directories found"
+              exit 1
+            fi
           fi
           
           # Extract the new version folder
@@ -101,39 +119,18 @@ jobs:
             fi
           done
           
-          # If no changes were detected and this is a manual run, find the latest version
-          if [[ "$NEW_VERSION" == "" && "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            # Find all version directories
-            VERSION_DIRS=$(find . -mindepth 2 -maxdepth 2 -type d | grep -v "node_modules" | grep -v ".git" | sort -V)
-            if [[ -n "$VERSION_DIRS" ]]; then
-              # Get the latest version directory
-              LATEST_VERSION_DIR=$(echo "$VERSION_DIRS" | tail -n 1)
-              NEW_VERSION=$(basename "$LATEST_VERSION_DIR")
-              NAMESPACE_PATH=$(dirname "$LATEST_VERSION_DIR" | sed 's|^./||' | xargs basename)
-              VERSION_PATH="${NAMESPACE_PATH}/${NEW_VERSION}"
-              echo "No changes detected, using latest version directory: ${NEW_VERSION}"
-              echo "skip_validation=true" >> $GITHUB_OUTPUT
-            else
-              echo "No version directories found"
-              echo "Directory listing for debugging:"
-              find . -type d -maxdepth 3
-              exit 1
-            fi
-          elif [[ "$NEW_VERSION" == "" ]]; then
+          if [[ "$NEW_VERSION" == "" ]]; then
             echo "No version folder changes detected"
             exit 1
           fi
           
-          # Skip validation if requested or if this is a manual run
-          if [[ "${{ github.event_name }}" != "workflow_dispatch" ]]; then
-            # Check if changes only affect the new version folder
-            for FILE in $CHANGED_FILES; do
-              if [[ ! $FILE =~ ^${NAMESPACE_PATH}/${NEW_VERSION}/ ]]; then
-                echo "Warning: Changes include files outside the new version folder"
-                echo "validation_warning=true" >> $GITHUB_OUTPUT
-              fi
-            done
-          fi
+          # Validate that only new version folder is changed
+          for FILE in $CHANGED_FILES; do
+            if [[ ! $FILE =~ ^${NAMESPACE_PATH}/${NEW_VERSION}/ ]]; then
+              echo "Warning: Changes include files outside the new version folder"
+              echo "validation_warning=true" >> $GITHUB_OUTPUT
+            fi
+          done
           
           echo "version=${NEW_VERSION}" >> $GITHUB_OUTPUT
           echo "namespace=${NAMESPACE_PATH}" >> $GITHUB_OUTPUT
@@ -191,7 +188,7 @@ jobs:
           echo "zip=./archives/${NAMESPACE}-${VERSION}.zip" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        if: steps.detect-version.outputs.version != '' && steps.check-release.outputs.exists != 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        if: steps.detect-version.outputs.version != '' && steps.check-release.outputs.exists != 'true'
         id: create-release
         uses: softprops/action-gh-release@v1
         with:

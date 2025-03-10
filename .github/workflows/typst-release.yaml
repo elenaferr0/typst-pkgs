@@ -1,0 +1,205 @@
+name: Typst Library Release
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  # Add manual trigger for existing versions
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Specific version to release (leave empty for auto-detection)'
+        required: false
+        default: ''
+
+jobs:
+  detect-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch all history for checking changes
+
+      - name: Set up Git user
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+      - name: Detect version
+        id: detect-version
+        run: |
+          # Check if a manual version was specified
+          if [[ "${{ github.event.inputs.version }}" != "" ]]; then
+            MANUAL_VERSION="${{ github.event.inputs.version }}"
+            REPO_OWNER=$(echo "${{ github.repository }}" | cut -d '/' -f 1)
+            NAMESPACE_PATH=$(find "/${REPO_OWNER}" -type d -name "${MANUAL_VERSION}" | head -n 1 | xargs dirname | xargs basename || echo "unknown")
+            
+            if [[ -d "/${REPO_OWNER}/${NAMESPACE_PATH}/${MANUAL_VERSION}" ]]; then
+              echo "Using manually specified version: ${MANUAL_VERSION}"
+              echo "::set-output name=version::${MANUAL_VERSION}"
+              echo "::set-output name=namespace::${NAMESPACE_PATH}"
+              echo "::set-output name=skip_validation::true"
+              exit 0
+            else
+              echo "Error: Manually specified version not found in repository structure"
+              exit 1
+            fi
+          fi
+          
+          # Get the latest commit hash
+          LATEST_COMMIT=$(git rev-parse HEAD)
+          
+          # Get the list of changed files in the latest commit or PR
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            # For PRs, compare with base branch
+            CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} $LATEST_COMMIT)
+          else
+            # For direct pushes, use the parent commit
+            CHANGED_FILES=$(git diff --name-only $LATEST_COMMIT^1 $LATEST_COMMIT || echo "")
+          fi
+          
+          # Extract repository structure parts
+          REPO_OWNER=$(echo "${{ github.repository }}" | cut -d '/' -f 1)
+          REPO_NAME=$(echo "${{ github.repository }}" | cut -d '/' -f 2)
+          
+          # Extract the new version folder
+          NEW_VERSION=""
+          NAMESPACE_PATH=""
+          for FILE in $CHANGED_FILES; do
+            # Match patterns like /<username>/<namespace>/<version>/...
+            if [[ $FILE =~ ^/${REPO_OWNER}/([^/]+)/([^/]+)/ ]]; then
+              NAMESPACE="${BASH_REMATCH[1]}"
+              VERSION="${BASH_REMATCH[2]}"
+              if [[ "$NEW_VERSION" == "" ]]; then
+                NEW_VERSION=$VERSION
+                NAMESPACE_PATH=$NAMESPACE
+              elif [[ "$NEW_VERSION" != "$VERSION" ]]; then
+                echo "Error: Multiple version folders modified in one commit"
+                exit 1
+              fi
+            fi
+          done
+          
+          # If no changes were detected and this is a manual run, find the latest version
+          if [[ "$NEW_VERSION" == "" && "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            # Find all version directories
+            VERSION_DIRS=$(find "/${REPO_OWNER}" -mindepth 2 -maxdepth 2 -type d | sort -V)
+            if [[ -n "$VERSION_DIRS" ]]; then
+              # Get the latest version directory
+              LATEST_VERSION_DIR=$(echo "$VERSION_DIRS" | tail -n 1)
+              NEW_VERSION=$(basename "$LATEST_VERSION_DIR")
+              NAMESPACE_PATH=$(dirname "$LATEST_VERSION_DIR" | xargs basename)
+              echo "No changes detected, using latest version directory: ${NEW_VERSION}"
+              echo "::set-output name=skip_validation::true"
+            else
+              echo "No version directories found"
+              exit 1
+            fi
+          elif [[ "$NEW_VERSION" == "" ]]; then
+            echo "No version folder changes detected"
+            exit 1
+          fi
+          
+          # Skip validation if requested or if this is a manual run
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" ]]; then
+            # Check if changes only affect the new version folder
+            for FILE in $CHANGED_FILES; do
+              if [[ ! $FILE =~ ^/${REPO_OWNER}/${NAMESPACE_PATH}/${NEW_VERSION}/ ]]; then
+                echo "Warning: Changes include files outside the new version folder"
+                echo "::set-output name=validation_warning::true"
+              fi
+            done
+          fi
+          
+          echo "::set-output name=version::${NEW_VERSION}"
+          echo "::set-output name=namespace::${NAMESPACE_PATH}"
+          echo "Version detected: ${NEW_VERSION}"
+
+      - name: Check if release exists
+        if: steps.detect-version.outputs.version != ''
+        id: check-release
+        run: |
+          # Check if the release already exists
+          RELEASE_EXISTS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/v${{ steps.detect-version.outputs.version }}")
+            
+          if [[ "$RELEASE_EXISTS" == "200" ]]; then
+            echo "Release already exists for version ${{ steps.detect-version.outputs.version }}"
+            echo "::set-output name=exists::true"
+          else
+            echo "No existing release found for version ${{ steps.detect-version.outputs.version }}"
+            echo "::set-output name=exists::false"
+          fi
+
+      - name: Create release archives
+        if: steps.detect-version.outputs.version != '' && steps.check-release.outputs.exists != 'true'
+        id: create-archives
+        run: |
+          VERSION="${{ steps.detect-version.outputs.version }}"
+          NAMESPACE="${{ steps.detect-version.outputs.namespace }}"
+          REPO_OWNER=$(echo "${{ github.repository }}" | cut -d '/' -f 1)
+          
+          # Debug info
+          echo "Creating archives for /${REPO_OWNER}/${NAMESPACE}/${VERSION}"
+          ls -la "/${REPO_OWNER}/${NAMESPACE}/${VERSION}" || echo "Directory not found"
+          
+          # Create archives directory
+          mkdir -p ./archives
+          
+          # Check if directory exists
+          if [[ ! -d "/${REPO_OWNER}/${NAMESPACE}/${VERSION}" ]]; then
+            echo "Error: Version directory not found: /${REPO_OWNER}/${NAMESPACE}/${VERSION}"
+            # Try alternative paths
+            echo "Searching for version directory..."
+            find "/${REPO_OWNER}" -name "${VERSION}" -type d
+            exit 1
+          fi
+          
+          # Create tar.gz archive
+          tar -czf "./archives/${NAMESPACE}-${VERSION}.tar.gz" -C "/" "${REPO_OWNER}/${NAMESPACE}/${VERSION}"
+          
+          # Create zip archive
+          (cd "/" && zip -r "$GITHUB_WORKSPACE/archives/${NAMESPACE}-${VERSION}.zip" "${REPO_OWNER}/${NAMESPACE}/${VERSION}")
+          
+          echo "::set-output name=targz::./archives/${NAMESPACE}-${VERSION}.tar.gz"
+          echo "::set-output name=zip::./archives/${NAMESPACE}-${VERSION}.zip"
+
+      - name: Create GitHub Release
+        if: steps.detect-version.outputs.version != '' && steps.check-release.outputs.exists != 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        id: create-release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ steps.detect-version.outputs.version }}
+          release_name: Version ${{ steps.detect-version.outputs.version }}
+          draft: false
+          prerelease: false
+          body: |
+            Release of version ${{ steps.detect-version.outputs.version }}
+            ${{ steps.detect-version.outputs.validation_warning == 'true' && '⚠️ Warning: This release may include changes outside the version directory.' || '' }}
+
+      - name: Upload tar.gz Asset
+        if: steps.detect-version.outputs.version != '' && steps.check-release.outputs.exists != 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create-release.outputs.upload_url }}
+          asset_path: ${{ steps.create-archives.outputs.targz }}
+          asset_name: ${{ steps.detect-version.outputs.namespace }}-${{ steps.detect-version.outputs.version }}.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload zip Asset
+        if: steps.detect-version.outputs.version != '' && steps.check-release.outputs.exists != 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create-release.outputs.upload_url }}
+          asset_path: ${{ steps.create-archives.outputs.zip }}
+          asset_name: ${{ steps.detect-version.outputs.namespace }}-${{ steps.detect-version.outputs.version }}.zip
+          asset_content_type: application/zip

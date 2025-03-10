@@ -33,17 +33,32 @@ jobs:
           # Check if a manual version was specified
           if [[ "${{ github.event.inputs.version }}" != "" ]]; then
             MANUAL_VERSION="${{ github.event.inputs.version }}"
-            REPO_OWNER=$(echo "${{ github.repository }}" | cut -d '/' -f 1)
-            NAMESPACE_PATH=$(find "/${REPO_OWNER}" -type d -name "${MANUAL_VERSION}" | head -n 1 | xargs dirname | xargs basename || echo "unknown")
             
-            if [[ -d "/${REPO_OWNER}/${NAMESPACE_PATH}/${MANUAL_VERSION}" ]]; then
-              echo "Using manually specified version: ${MANUAL_VERSION}"
+            # List all directories to find the namespace and version
+            echo "Searching for version directory..."
+            
+            # This is the important change - use the current directory (repository root)
+            # rather than the absolute path with username
+            NAMESPACE_PATHS=$(find . -type d -name "${MANUAL_VERSION}" | grep -v "node_modules" | grep -v ".git" || echo "")
+            
+            if [[ -n "$NAMESPACE_PATHS" ]]; then
+              # Get the first matching namespace path
+              VERSION_PATH=$(echo "$NAMESPACE_PATHS" | head -n 1)
+              NAMESPACE=$(echo "$VERSION_PATH" | cut -d'/' -f2)
+              
+              echo "Found version at path: ${VERSION_PATH}"
+              echo "Namespace: ${NAMESPACE}"
+              echo "Version: ${MANUAL_VERSION}"
+              
               echo "::set-output name=version::${MANUAL_VERSION}"
-              echo "::set-output name=namespace::${NAMESPACE_PATH}"
+              echo "::set-output name=namespace::${NAMESPACE}"
+              echo "::set-output name=version_path::${VERSION_PATH}"
               echo "::set-output name=skip_validation::true"
               exit 0
             else
-              echo "Error: Manually specified version not found in repository structure"
+              echo "Error: Manually specified version ${MANUAL_VERSION} not found in repository structure"
+              echo "Directory listing for debugging:"
+              find . -type d -maxdepth 3
               exit 1
             fi
           fi
@@ -57,24 +72,23 @@ jobs:
             CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} $LATEST_COMMIT)
           else
             # For direct pushes, use the parent commit
-            CHANGED_FILES=$(git diff --name-only $LATEST_COMMIT^1 $LATEST_COMMIT || echo "")
+            CHANGED_FILES=$(git diff --name-only $LATEST_COMMIT^1 $LATEST_COMMIT 2>/dev/null || echo "")
           fi
-          
-          # Extract repository structure parts
-          REPO_OWNER=$(echo "${{ github.repository }}" | cut -d '/' -f 1)
-          REPO_NAME=$(echo "${{ github.repository }}" | cut -d '/' -f 2)
           
           # Extract the new version folder
           NEW_VERSION=""
           NAMESPACE_PATH=""
+          VERSION_PATH=""
+          
           for FILE in $CHANGED_FILES; do
-            # Match patterns like /<username>/<namespace>/<version>/...
-            if [[ $FILE =~ ^/${REPO_OWNER}/([^/]+)/([^/]+)/ ]]; then
+            # Match patterns like /<namespace>/<version>/... with relative paths
+            if [[ $FILE =~ ^([^/]+)/([^/]+)/ ]]; then
               NAMESPACE="${BASH_REMATCH[1]}"
               VERSION="${BASH_REMATCH[2]}"
               if [[ "$NEW_VERSION" == "" ]]; then
                 NEW_VERSION=$VERSION
                 NAMESPACE_PATH=$NAMESPACE
+                VERSION_PATH="${NAMESPACE}/${VERSION}"
               elif [[ "$NEW_VERSION" != "$VERSION" ]]; then
                 echo "Error: Multiple version folders modified in one commit"
                 exit 1
@@ -85,16 +99,19 @@ jobs:
           # If no changes were detected and this is a manual run, find the latest version
           if [[ "$NEW_VERSION" == "" && "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             # Find all version directories
-            VERSION_DIRS=$(find "/${REPO_OWNER}" -mindepth 2 -maxdepth 2 -type d | sort -V)
+            VERSION_DIRS=$(find . -mindepth 2 -maxdepth 2 -type d | grep -v "node_modules" | grep -v ".git" | sort -V)
             if [[ -n "$VERSION_DIRS" ]]; then
               # Get the latest version directory
               LATEST_VERSION_DIR=$(echo "$VERSION_DIRS" | tail -n 1)
               NEW_VERSION=$(basename "$LATEST_VERSION_DIR")
-              NAMESPACE_PATH=$(dirname "$LATEST_VERSION_DIR" | xargs basename)
+              NAMESPACE_PATH=$(dirname "$LATEST_VERSION_DIR" | sed 's|^./||' | xargs basename)
+              VERSION_PATH="${NAMESPACE_PATH}/${NEW_VERSION}"
               echo "No changes detected, using latest version directory: ${NEW_VERSION}"
               echo "::set-output name=skip_validation::true"
             else
               echo "No version directories found"
+              echo "Directory listing for debugging:"
+              find . -type d -maxdepth 3
               exit 1
             fi
           elif [[ "$NEW_VERSION" == "" ]]; then
@@ -106,7 +123,7 @@ jobs:
           if [[ "${{ github.event_name }}" != "workflow_dispatch" ]]; then
             # Check if changes only affect the new version folder
             for FILE in $CHANGED_FILES; do
-              if [[ ! $FILE =~ ^/${REPO_OWNER}/${NAMESPACE_PATH}/${NEW_VERSION}/ ]]; then
+              if [[ ! $FILE =~ ^${NAMESPACE_PATH}/${NEW_VERSION}/ ]]; then
                 echo "Warning: Changes include files outside the new version folder"
                 echo "::set-output name=validation_warning::true"
               fi
@@ -115,7 +132,8 @@ jobs:
           
           echo "::set-output name=version::${NEW_VERSION}"
           echo "::set-output name=namespace::${NAMESPACE_PATH}"
-          echo "Version detected: ${NEW_VERSION}"
+          echo "::set-output name=version_path::${VERSION_PATH}"
+          echo "Version detected: ${NEW_VERSION} in namespace ${NAMESPACE_PATH}"
 
       - name: Check if release exists
         if: steps.detect-version.outputs.version != ''
@@ -140,29 +158,29 @@ jobs:
         run: |
           VERSION="${{ steps.detect-version.outputs.version }}"
           NAMESPACE="${{ steps.detect-version.outputs.namespace }}"
-          REPO_OWNER=$(echo "${{ github.repository }}" | cut -d '/' -f 1)
+          VERSION_PATH="${{ steps.detect-version.outputs.version_path }}"
           
           # Debug info
-          echo "Creating archives for /${REPO_OWNER}/${NAMESPACE}/${VERSION}"
-          ls -la "/${REPO_OWNER}/${NAMESPACE}/${VERSION}" || echo "Directory not found"
+          echo "Creating archives for ${VERSION_PATH}"
+          ls -la "${VERSION_PATH}" || echo "Directory not found"
           
           # Create archives directory
           mkdir -p ./archives
           
           # Check if directory exists
-          if [[ ! -d "/${REPO_OWNER}/${NAMESPACE}/${VERSION}" ]]; then
-            echo "Error: Version directory not found: /${REPO_OWNER}/${NAMESPACE}/${VERSION}"
+          if [[ ! -d "${VERSION_PATH}" ]]; then
+            echo "Error: Version directory not found: ${VERSION_PATH}"
             # Try alternative paths
             echo "Searching for version directory..."
-            find "/${REPO_OWNER}" -name "${VERSION}" -type d
+            find . -name "${VERSION}" -type d
             exit 1
           fi
           
           # Create tar.gz archive
-          tar -czf "./archives/${NAMESPACE}-${VERSION}.tar.gz" -C "/" "${REPO_OWNER}/${NAMESPACE}/${VERSION}"
+          tar -czf "./archives/${NAMESPACE}-${VERSION}.tar.gz" "${VERSION_PATH}"
           
           # Create zip archive
-          (cd "/" && zip -r "$GITHUB_WORKSPACE/archives/${NAMESPACE}-${VERSION}.zip" "${REPO_OWNER}/${NAMESPACE}/${VERSION}")
+          zip -r "./archives/${NAMESPACE}-${VERSION}.zip" "${VERSION_PATH}"
           
           echo "::set-output name=targz::./archives/${NAMESPACE}-${VERSION}.tar.gz"
           echo "::set-output name=zip::./archives/${NAMESPACE}-${VERSION}.zip"

@@ -141,7 +141,7 @@ jobs:
         run: |
           # Check if the release already exists
           RELEASE_EXISTS=$(curl -s -o /dev/null -w "%{http_code}" \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Authorization: token ${{ secrets.RELEASE_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/releases/tags/v${{ steps.detect-version.outputs.version }}")
             
           if [[ "$RELEASE_EXISTS" == "200" ]]; then
@@ -190,7 +190,7 @@ jobs:
         id: create-release
         uses: actions/create-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         with:
           tag_name: v${{ steps.detect-version.outputs.version }}
           release_name: Version ${{ steps.detect-version.outputs.version }}
@@ -204,7 +204,7 @@ jobs:
         if: steps.detect-version.outputs.version != '' && steps.check-release.outputs.exists != 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         uses: actions/upload-release-asset@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         with:
           upload_url: ${{ steps.create-release.outputs.upload_url }}
           asset_path: ${{ steps.create-archives.outputs.targz }}
@@ -215,7 +215,7 @@ jobs:
         if: steps.detect-version.outputs.version != '' && steps.check-release.outputs.exists != 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         uses: actions/upload-release-asset@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         with:
           upload_url: ${{ steps.create-release.outputs.upload_url }}
           asset_path: ${{ steps.create-archives.outputs.zip }}

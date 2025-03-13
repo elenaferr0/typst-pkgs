@@ -7,5 +7,6 @@
 #let E = $#sym.EE$
 #let R = $#sym.RR$
 #let Z = $#sym.ZZ$
+#let N = $#sym.NN$
 #let empty = $#sym.diameter$
 

@@ -10,3 +10,4 @@
 #let N = $#sym.NN$
 #let empty = $#sym.diameter$
 
+#let forall = $#sym.space.quad #sym.forall$;

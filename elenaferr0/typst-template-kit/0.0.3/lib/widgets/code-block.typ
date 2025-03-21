@@ -1,7 +1,7 @@
 #let code-block(body, title: none, border: true, breakable: false) = {
   let color = rgb(200,200,200);
 
-  v(5pt)
+  v(2pt)
   block(
     breakable: breakable,
     radius: 5pt,

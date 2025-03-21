@@ -31,7 +31,7 @@
   ),
 )
 
-#let callout(body, title: none, type: "theorem", breakable: false) = {
+#let _callout(body, title: none, type: "theorem", breakable: false) = {
   assert(type in types)
   let type-name = upper(type.at(0)) + type.slice(1)
   let (file, color) = types.at(type)
@@ -48,7 +48,7 @@
       breakable: breakable,
       width: 100%,
       spacing: 0pt,
-      radius: (x: radius, y: 0),
+      radius: (top: radius, bottom: 0pt),
       inset: (x: 1em, y: 0.35em),
       grid(
         columns: 2,
@@ -67,3 +67,12 @@
     ]
   ]
 }
+
+// Shortcuts for callouts of given types
+#let info(body, title: none, breakable: false) = _callout(body, title: title, type: "info", breakable: breakable)
+#let warn(body, title: none, breakable: false) = _callout(body, title: title, type: "warning", breakable: breakable)
+#let err(body, title: none, breakable: false) = _callout(body, title: title, type: "error", breakable: breakable)
+#let prob(body, title: none, breakable: false) = _callout(body, title: title, type: "problem", breakable: breakable)
+#let question(body, title: none, breakable: false) = _callout(body, title: title, type: "question", breakable: breakable)
+#let eg(body, title: none, breakable: false) = _callout(body, title: title, type: "example", breakable: breakable)
+#let theo(body, title: none, breakable: false) = _callout(body, title: title, type: "theorem", breakable: breakable)

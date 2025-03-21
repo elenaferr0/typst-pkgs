@@ -41,7 +41,7 @@
   block(
     breakable: breakable,
     radius: radius,
-    stroke: 2pt + color,
+    stroke: 1pt + color,
   )[
     #block(
       fill: color,

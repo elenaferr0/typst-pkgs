@@ -52,6 +52,7 @@
   }
 
   show image: it => align(center, it)
+  show link: underline
 
   body
 }

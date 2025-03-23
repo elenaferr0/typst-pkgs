@@ -11,3 +11,4 @@
 #let empty = $#sym.diameter$
 
 #let forall = $#sym.space.quad #sym.forall$;
+#let exists = $#sym.space.quad #sym.exists$;

@@ -15,7 +15,7 @@ scripts/               # Utilities to manage pkgs
 ```
 
 ## Local setup
-Typst local packages are stored in this path `{data-dir}/typst/packages/{namespace}/{name}/{version}`, where `{data-dir}` depends on your OS. Find the corresponding path #[here](https://github.com/typst/packages?tab=readme-ov-file#local-packages).
+Typst local packages are stored in this path `{data-dir}/typst/packages/{namespace}/{name}/{version}`, where `{data-dir}` depends on your OS. Find the corresponding path [here](https://github.com/typst/packages?tab=readme-ov-file#local-packages).
 To use any of the packages inside this repo you would simply need to place it in the right folder and then import it.
 
 Get the right `{data-dir}` for your OS in the link above, then simply clone this repo in `{data-dir}/typst/packages`.

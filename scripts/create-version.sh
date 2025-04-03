@@ -1,5 +1,12 @@
+
+# Check if both parameters are provided
+if [ $# -lt 1 ]; then
+    echo "Usage: $0 library_name"
+    exit 1
+fi
+
 username="elenaferr0"
-library="typst-template-kit"
+library="$1"
 
 # Get the latest version from the directory
 prev_version=$(ls "$username/$library/" | sort | tail -n 1)
@@ -27,4 +34,5 @@ cp -r "$username/$library/$prev_version" "$username/$library/$new_version"
 
 echo "Updating typst.toml version to $new_version..."
 sed "s/$prev_version/$new_version/" "$username/$library/$prev_version/typst.toml" > "$username/$library/$new_version/typst.toml"
+
 echo "Done."

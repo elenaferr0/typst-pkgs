@@ -1,166 +1,76 @@
-name: Typst Library Release
+name: Typst Package Release
 
 # Define permissions at the workflow level
 permissions:
   contents: write
   packages: write
 
+# Only trigger manually via workflow_dispatch
 on:
-  # Only trigger on completed pull requests to master/main
-  pull_request:
-    types: [closed]
-    branches: [master, main]
-  # Keep manual trigger for testing and backdating
   workflow_dispatch:
     inputs:
+      library:
+        description: 'Library/namespace name (e.g., typst-template-kit)'
+        required: true
       version:
-        description: 'Specific version to release (leave empty for auto-detection)'
-        required: false
-        default: ''
+        description: 'Version to release (e.g., 1.2.3)'
+        required: true
 
 jobs:
-  detect-and-release:
-    # Only run if the PR was merged (not just closed without merging)
-    if: ${{ github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch' }}
+  release-package:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Fetch all history for checking changes
+          fetch-depth: 0  # Fetch all history
 
       - name: Set up Git user
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
 
-      - name: Detect version
-        id: detect-version
+      - name: Validate inputs
+        id: validate-inputs
         run: |
-          # Check if a manual version was specified
-          if [[ "${{ github.event.inputs.version }}" != "" ]]; then
-            MANUAL_VERSION="${{ github.event.inputs.version }}"
-            
-            # List all directories to find the namespace and version
-            echo "Searching for version directory..."
-            
-            # Use the current directory (repository root) for path resolution
-            NAMESPACE_PATHS=$(find . -type d -name "${MANUAL_VERSION}" | grep -v "node_modules" | grep -v ".git" || echo "")
-            
-            if [[ -n "$NAMESPACE_PATHS" ]]; then
-              # Get the first matching namespace path
-              VERSION_PATH=$(echo "$NAMESPACE_PATHS" | head -n 1)
-              NAMESPACE=$(echo "$VERSION_PATH" | cut -d'/' -f2)
-              
-              echo "Found version at path: ${VERSION_PATH}"
-              echo "Namespace: ${NAMESPACE}"
-              echo "Version: ${MANUAL_VERSION}"
-              
-              echo "version=${MANUAL_VERSION}" >> $GITHUB_OUTPUT
-              echo "namespace=${NAMESPACE}" >> $GITHUB_OUTPUT
-              echo "version_path=${VERSION_PATH}" >> $GITHUB_OUTPUT
-              echo "skip_validation=true" >> $GITHUB_OUTPUT
-              exit 0
-            else
-              echo "Error: Manually specified version ${MANUAL_VERSION} not found in repository structure"
-              echo "Directory listing for debugging:"
-              find . -type d -maxdepth 3
-              exit 1
-            fi
-          fi
+          LIBRARY="${{ github.event.inputs.library }}"
+          VERSION="${{ github.event.inputs.version }}"
           
-          # For PR-based detection, use the PR base and head commits
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            # For merged PRs, get changed files between base and merge commit
-            BASE_SHA="${{ github.event.pull_request.base.sha }}"
-            HEAD_SHA="${{ github.event.pull_request.merge_commit_sha }}"
-            CHANGED_FILES=$(git diff --name-only $BASE_SHA $HEAD_SHA)
-          else
-            # Fallback for manual workflow runs without version
-            echo "For workflow_dispatch, please specify a version to release"
-            echo "Looking for the latest version folder instead..."
-            VERSION_DIRS=$(find . -mindepth 2 -maxdepth 2 -type d | grep -v "node_modules" | grep -v ".git" | sort -V)
-            if [[ -n "$VERSION_DIRS" ]]; then
-              # Get the latest version directory
-              LATEST_VERSION_DIR=$(echo "$VERSION_DIRS" | tail -n 1)
-              NEW_VERSION=$(basename "$LATEST_VERSION_DIR")
-              NAMESPACE_PATH=$(dirname "$LATEST_VERSION_DIR" | sed 's|^./||' | xargs basename)
-              VERSION_PATH="${NAMESPACE_PATH}/${NEW_VERSION}"
-              echo "No changes detected, using latest version directory: ${NEW_VERSION}"
-              echo "version=${NEW_VERSION}" >> $GITHUB_OUTPUT
-              echo "namespace=${NAMESPACE_PATH}" >> $GITHUB_OUTPUT
-              echo "version_path=${VERSION_PATH}" >> $GITHUB_OUTPUT
-              echo "skip_validation=true" >> $GITHUB_OUTPUT
-              exit 0
-            else
-              echo "No version directories found"
-              exit 1
-            fi
-          fi
-          
-          # Extract the new version folder
-          NEW_VERSION=""
-          NAMESPACE_PATH=""
-          VERSION_PATH=""
-          
-          for FILE in $CHANGED_FILES; do
-            # Match patterns like /<namespace>/<version>/... with relative paths
-            if [[ $FILE =~ ^([^/]+)/([^/]+)/ ]]; then
-              NAMESPACE="${BASH_REMATCH[1]}"
-              VERSION="${BASH_REMATCH[2]}"
-              if [[ "$NEW_VERSION" == "" ]]; then
-                NEW_VERSION=$VERSION
-                NAMESPACE_PATH=$NAMESPACE
-                VERSION_PATH="${NAMESPACE}/${VERSION}"
-              elif [[ "$NEW_VERSION" != "$VERSION" ]]; then
-                echo "Error: Multiple version folders modified in one commit"
-                exit 1
-              fi
-            fi
-          done
-          
-          if [[ "$NEW_VERSION" == "" ]]; then
-            echo "No version folder changes detected"
+          # Check if the specified version directory exists
+          if [[ ! -d "$LIBRARY/$VERSION" ]]; then
+            echo "Error: Directory $LIBRARY/$VERSION does not exist"
+            echo "Available directories:"
+            find . -mindepth 2 -maxdepth 2 -type d | grep -v "node_modules" | grep -v ".git"
             exit 1
           fi
           
-          # Validate that only new version folder is changed
-          for FILE in $CHANGED_FILES; do
-            if [[ ! $FILE =~ ^${NAMESPACE_PATH}/${NEW_VERSION}/ ]]; then
-              echo "Warning: Changes include files outside the new version folder"
-              echo "validation_warning=true" >> $GITHUB_OUTPUT
-            fi
-          done
-          
-          echo "version=${NEW_VERSION}" >> $GITHUB_OUTPUT
-          echo "namespace=${NAMESPACE_PATH}" >> $GITHUB_OUTPUT
-          echo "version_path=${VERSION_PATH}" >> $GITHUB_OUTPUT
-          echo "Version detected: ${NEW_VERSION} in namespace ${NAMESPACE_PATH}"
+          echo "library=$LIBRARY" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version_path=$LIBRARY/$VERSION" >> $GITHUB_OUTPUT
 
       - name: Check if release exists
-        if: steps.detect-version.outputs.version != ''
         id: check-release
         run: |
           # Check if the release already exists
           RELEASE_EXISTS=$(curl -s -o /dev/null -w "%{http_code}" \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/tags/v${{ steps.detect-version.outputs.version }}")
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/v${{ steps.validate-inputs.outputs.version }}")
             
           if [[ "$RELEASE_EXISTS" == "200" ]]; then
-            echo "Release already exists for version ${{ steps.detect-version.outputs.version }}"
+            echo "Release already exists for version ${{ steps.validate-inputs.outputs.version }}"
             echo "exists=true" >> $GITHUB_OUTPUT
           else
-            echo "No existing release found for version ${{ steps.detect-version.outputs.version }}"
+            echo "No existing release found for version ${{ steps.validate-inputs.outputs.version }}"
             echo "exists=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Create release archives
-        if: steps.detect-version.outputs.version != '' && steps.check-release.outputs.exists != 'true'
+        if: steps.check-release.outputs.exists != 'true'
         id: create-archives
         run: |
-          VERSION="${{ steps.detect-version.outputs.version }}"
-          NAMESPACE="${{ steps.detect-version.outputs.namespace }}"
-          VERSION_PATH="${{ steps.detect-version.outputs.version_path }}"
+          LIBRARY="${{ steps.validate-inputs.outputs.library }}"
+          VERSION="${{ steps.validate-inputs.outputs.version }}"
+          VERSION_PATH="${{ steps.validate-inputs.outputs.version_path }}"
           
           # Debug info
           echo "Creating archives for ${VERSION_PATH}"
@@ -169,36 +79,31 @@ jobs:
           # Create archives directory
           mkdir -p ./archives
           
-          # Check if directory exists
-          if [[ ! -d "${VERSION_PATH}" ]]; then
-            echo "Error: Version directory not found: ${VERSION_PATH}"
-            # Try alternative paths
-            echo "Searching for version directory..."
-            find . -name "${VERSION}" -type d
-            exit 1
-          fi
-          
           # Create tar.gz archive
-          tar -czf "./archives/${NAMESPACE}-${VERSION}.tar.gz" "${VERSION_PATH}"
+          tar -czf "./archives/${LIBRARY}-${VERSION}.tar.gz" "${VERSION_PATH}"
           
           # Create zip archive
-          zip -r "./archives/${NAMESPACE}-${VERSION}.zip" "${VERSION_PATH}"
+          zip -r "./archives/${LIBRARY}-${VERSION}.zip" "${VERSION_PATH}"
           
-          echo "targz=./archives/${NAMESPACE}-${VERSION}.tar.gz" >> $GITHUB_OUTPUT
-          echo "zip=./archives/${NAMESPACE}-${VERSION}.zip" >> $GITHUB_OUTPUT
+          echo "targz=./archives/${LIBRARY}-${VERSION}.tar.gz" >> $GITHUB_OUTPUT
+          echo "zip=./archives/${LIBRARY}-${VERSION}.zip" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        if: steps.detect-version.outputs.version != '' && steps.check-release.outputs.exists != 'true'
+        if: steps.check-release.outputs.exists != 'true'
         id: create-release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ steps.detect-version.outputs.version }}
-          name: Version ${{ steps.detect-version.outputs.version }}
+          tag_name: v${{ steps.validate-inputs.outputs.version }}
+          name: Version ${{ steps.validate-inputs.outputs.version }}
           draft: false
           prerelease: false
           body: |
-            Release of version ${{ steps.detect-version.outputs.version }}
-            ${{ steps.detect-version.outputs.validation_warning == 'true' && '⚠️ Warning: This release may include changes outside the version directory.' || '' }}
+            Manual release of ${{ steps.validate-inputs.outputs.library }} version ${{ steps.validate-inputs.outputs.version }}
           files: |
             ${{ steps.create-archives.outputs.targz }}
             ${{ steps.create-archives.outputs.zip }}
+      
+      - name: Release Status
+        if: steps.check-release.outputs.exists == 'true'
+        run: |
+          echo "::warning::Release v${{ steps.validate-inputs.outputs.version }} already exists. No new release was created."

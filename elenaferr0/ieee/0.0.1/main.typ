@@ -25,6 +25,11 @@
   // Use "Figure" instead of "Fig." for computer-related publications.
   figure-supplement: [Fig.],
 
+  // The font used for the paper's text.
+  body-font-family: "TeX Gyre Termes",
+  // The font used for the paper's code blocks.
+  code-font-family: "TeX Gyre Cursor",
+
   // The paper's content.
   body
 ) = {
@@ -34,7 +39,7 @@
   // Set the body font.
   // As of 2024-08, the IEEE LaTeX template uses wider interword spacing
   // - See e.g. the definition \def\@IEEEinterspaceratioM{0.35} in IEEEtran.cls
-  set text(font: "TeX Gyre Termes", size: 10pt, spacing: .35em)
+  set text(font: body-font-family, size: 10pt, spacing: .35em)
 
   // Enums numbering
   set enum(numbering: "1)a)i)")
@@ -67,7 +72,7 @@
 
   // Code blocks
   show raw: set text(
-    font: "TeX Gyre Cursor",
+    font: code-font-family,
     ligatures: false,
     size: 1em / 0.8,
     spacing: 100%,

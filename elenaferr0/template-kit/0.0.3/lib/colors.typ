@@ -7,6 +7,7 @@
 
 // Light
 #let light-blue = rgb("#464D77");
+#let light-yellow = rgb("#e4ea88");
 #let lighter-blue = rgb("#b5e4fc");
 #let light-green = rgb("#a0d8a4");
 #let light-grey = rgb("#e0e0e0");

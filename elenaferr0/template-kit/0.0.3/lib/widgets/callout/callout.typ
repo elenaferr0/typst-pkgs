@@ -19,7 +19,7 @@
   ),
   question: (
     file: "question.svg",
-    color: light-grey,
+    color: light-yellow,
   ),
   example: (
     file: "experiment.svg",

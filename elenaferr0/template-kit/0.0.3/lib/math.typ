@@ -2,6 +2,7 @@
 // Just a collection of math symbols
 
 #let impl = $#arrow.r.double$ 
+#let n-impl = $#arrow.r.double.not$
 #let to = $#arrow.r.long$ 
 #let iff = $#arrow.l.r.double$
 #let E = $#sym.EE$

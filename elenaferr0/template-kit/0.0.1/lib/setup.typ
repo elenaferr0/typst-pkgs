@@ -10,39 +10,25 @@
   set outline(depth: 3, indent: 10pt)
 
   set page(
-    header: context {
+    header: context{
       if here().page() != 1 {
         grid(
-          columns: 2,
-          gutter: 5pt,
-          text(header-l, grey, style: "italic", size: font-size - 1pt),
-          align(right, text(header-r, grey, style: "italic", size: font-size - 1pt)),
-          grid.cell(
-            colspan: 2,
-            line(length: 100%, stroke: grey)
-          )
+          columns: 2, gutter: 5pt, text(header-l, grey, style: "italic", size: font-size - 1pt), align(right, text(header-r, grey, style: "italic", size: font-size - 1pt)), grid.cell(colspan: 2, line(length: 100%, stroke: grey)),
         )
       }
-    },
-    footer: context {
+    }, footer: context{
       if counter(page).get().first() == 1 {
         return
       }
-      
+
       let alignment = if calc.odd(counter(page).get().first()) {
         right
       } else {
         left
       }
 
-    align(
-      alignment, 
-      counter(page).display(
-        "1/1",
-        both: true,
-       )
-     )
-    }
+      align(alignment, counter(page).display("1/1", both: true))
+    },
   )
 
   // show rules

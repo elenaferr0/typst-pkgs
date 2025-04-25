@@ -3,34 +3,42 @@
 #let types = (
   info: (
     file: "info.svg",
+	text-color: black,
     color: light-grey,
   ),
   warning: (
     file: "warning.svg",
+	text-color: black,
     color: orange,
   ),
   error: (
     file: "error.svg",
+	text-color: black,
     color: red,
   ),
   problem: (
     file: "bug_report.svg",
+	text-color: black,
     color: light-green,
   ),
   question: (
     file: "question.svg",
+	text-color: black,
     color: light-yellow,
   ),
   example: (
     file: "experiment.svg",
+	text-color: black,
     color: purple,
   ),
   theorem: (
     file: "theorem.svg",
+	text-color: black,
     color: lighter-blue,
   ),
   idea: (
     file: "idea.svg",
+	text-color: white,
     color: blue,
   ),
 )
@@ -38,7 +46,7 @@
 #let _callout(body, title: none, type: "theorem", breakable: false) = {
   assert(type in types)
   let type-name = upper(type.at(0)) + type.slice(1)
-  let (file, color) = types.at(type)
+  let (file, color, text-color) = types.at(type)
   let radius = 5pt
 
   v(5pt)
@@ -59,7 +67,7 @@
         gutter: 6pt,
         align: start + horizon,
         image("icons/" + file, width: 1.25em),
-        text(if title != none { title } else { type-name }, weight: "bold"),
+        text(if title != none { title } else { type-name }, weight: "bold", text-color),
       ),
     )
     #block(

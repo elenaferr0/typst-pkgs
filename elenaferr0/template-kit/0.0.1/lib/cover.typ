@@ -1,32 +1,24 @@
 #import "colors.typ": *
 
 #let cover(
-  body,
-  title: str,
-  subtitle: none,
-  name: str,
-  uni: str,
-  primary-color: blue,
-  secondary-color: light-blue,
+  body, title: str, subtitle: none, name: str, uni: str, primary-color: blue, secondary-color: light-blue,
 ) = {
   place(
-    bottom + left,
-    [
+    bottom + left, [
       #move(
-        dx: -200pt,
-        dy: 250pt,
-        [#rotate(30deg, [#rect(width: 500pt, height: 300pt, fill: secondary-color, stroke: none)])],
+        dx: -200pt, dy: 250pt, [#rotate(
+            30deg, [#rect(width: 500pt, height: 300pt, fill: secondary-color, stroke: none)],
+          )],
       )
     ],
   )
 
   place(
-    bottom + right,
-    [
+    bottom + right, [
       #move(
-        dx: 280pt,
-        dy: 250pt,
-        [#rotate(-30deg, [#rect(width: 1000pt, height: 400pt, fill: primary-color, stroke: none)])],
+        dx: 280pt, dy: 250pt, [#rotate(
+            -30deg, [#rect(width: 1000pt, height: 400pt, fill: primary-color, stroke: none)],
+          )],
       )
     ],
   )

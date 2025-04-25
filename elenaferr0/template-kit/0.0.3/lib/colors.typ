@@ -1,5 +1,5 @@
 // Pastel
-#let blue = rgb("#79ADDC");
+#let blue = rgb("#0f89db");
 #let orange = rgb("#f2c476");
 #let purple = rgb("#c2a0d8");
 #let red = rgb("#f45a5a")

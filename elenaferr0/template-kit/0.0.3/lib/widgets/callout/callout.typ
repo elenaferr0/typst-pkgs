@@ -29,6 +29,10 @@
     file: "theorem.svg",
     color: lighter-blue,
   ),
+  idea: (
+    file: "idea.svg",
+    color: blue,
+  ),
 )
 
 #let _callout(body, title: none, type: "theorem", breakable: false) = {
@@ -76,3 +80,4 @@
 #let question(body, title: none, breakable: false) = _callout(body, title: title, type: "question", breakable: breakable)
 #let eg(body, title: none, breakable: false) = _callout(body, title: title, type: "example", breakable: breakable)
 #let theo(body, title: none, breakable: false) = _callout(body, title: title, type: "theorem", breakable: breakable)
+#let idea(body, title: none, breakable: false) = _callout(body, title: title, type: "idea", breakable: breakable)
